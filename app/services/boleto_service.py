@@ -1,0 +1,1 @@
+#para calcular as logicas de tratamento do boleto (atrasado? pago?)
