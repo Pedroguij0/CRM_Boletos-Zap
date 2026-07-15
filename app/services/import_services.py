@@ -15,6 +15,8 @@ def importar_clientes(session, caminho_excel):
     df = pd.read_excel(caminho_excel)
     cadastrados = 0
     for _, linha in df.iterrows():
+        if pd.isna(linha.get('CODCLI')) or pd.isna(linha.get('CLIENTE')):
+            continue
         codcli = int(linha["CODCLI"])
         nome = str(linha["CLIENTE"]).strip()
         telefone_cru = None
@@ -44,6 +46,8 @@ def importar_boletos(session, caminho_excel):
     df = pd.read_excel(caminho_excel)
     cadastrados = 0
     for _, linha in df.iterrows():
+        if pd.isna(linha.get('CODCLI')) or pd.isna(linha.get('LINHADIG')):
+            continue
         codcli = int(linha['CODCLI'])
         valor = float(linha['VALOR'])
         prestacao = int(linha['PREST'])

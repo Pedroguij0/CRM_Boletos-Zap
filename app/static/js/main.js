@@ -87,8 +87,10 @@ function formatMoney(value) {
 
 function formatDate(dateStr) {
     if (!dateStr) return '-';
-    // Handle formats like "Fri, 10 May 2026 00:00:00 GMT" or ISO
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return dateStr;
-    return d.toLocaleDateString('pt-BR');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const year = d.getUTCFullYear();
+    return `${day}/${month}/${year}`;
 }

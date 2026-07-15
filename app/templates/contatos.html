@@ -189,7 +189,8 @@
                 const isPaid = b.status === 'pago';
                 const actionButton = isPaid 
                     ? `<button class="btn btn-secondary" disabled style="padding: 6px 12px; font-size: 11px; opacity:0.5; cursor:not-allowed;">Pago</button>`
-                    : `<button class="btn btn-success" onclick="abrirLiquidarModal(${b.id})" style="padding: 6px 12px; font-size: 11px;">Baixa Manual</button>`;
+                    : `<button class="btn btn-primary" onclick="enviarWhatsAppManual(${b.id})" style="padding: 6px 12px; font-size: 11px; margin-right: 6px;">Cobrar (WhatsApp)</button>` +
+                      `<button class="btn btn-success" onclick="abrirLiquidarModal(${b.id})" style="padding: 6px 12px; font-size: 11px;">Baixa Manual</button>`;
 
                 tbody.innerHTML += `
                     <tr data-search="${b.cliente_nome.toLowerCase()} ${b.codigo_id} ${b.status}">
@@ -259,6 +260,22 @@
             showToast("Falha na conexão do servidor", "danger");
         });
     });
+
+    function enviarWhatsAppManual(boletoId) {
+        showToast("Iniciando envio manual...", "info");
+        fetch(`/api/boletos/${boletoId}/enviar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        }).then(res => res.json()).then(data => {
+            if (data.erro) {
+                showToast("Erro ao enviar cobrança: " + data.erro, "danger");
+            } else {
+                showToast("Cobrança enviada via WhatsApp com sucesso!");
+            }
+        }).catch(() => {
+            showToast("Falha na chamada de rede", "danger");
+        });
+    }
 
     function exportarDadosLGPD(clienteId) {
         window.location.href = `/api/clientes/${clienteId}/lgpd-exportar`;

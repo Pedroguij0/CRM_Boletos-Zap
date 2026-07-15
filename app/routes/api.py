@@ -1,3 +1,4 @@
+from app.services.whatsapp import enviar_mensagem
 from flask import Blueprint, jsonify, request, send_file
 import os
 import json
@@ -34,18 +35,18 @@ def alterar_notificacao(cliente_id):
     session = get_session()
     dados = request.get_json()
     if not dados or 'notificacao_ativa' not in dados:
-        return jsonify({"ERRO" :"O parametro 'notificacao_ativa' nao foi encontrado" }), 400
+        return jsonify({"erro" :"O parametro 'notificacao_ativa' nao foi encontrado" }), 400
 
     try:
         cliente = session.query(Titular).filter(Titular.id == cliente_id).first()
         if not cliente:
-            return jsonify({f"ERRO": "O cliente de id {cliente_id} nao foi encontrado"}), 404
+            return jsonify({f"erro": "O cliente de id {cliente_id} nao foi encontrado"}), 404
         cliente.notificacao_ativa = bool(dados['notificacao_ativa'])
         session.commit()
         return jsonify({'mensagem':'status de notificacao alterado com sucesso!'}), 200
     except Exception as e:
         session.rollback()
-        return jsonify({'erro:':str(e)}),500
+        return jsonify({'erro':str(e)}),500
     finally:
         session.close()
 
@@ -69,7 +70,7 @@ def listar_boletos():
             })
         return jsonify(listaB), 200
     except Exception as e:
-        return jsonify({"Erro:":str(e)}),500
+        return jsonify({"erro":str(e)}),500
     finally:
         session.close()
 
@@ -83,14 +84,14 @@ def liquidar_boleto(boleto_id):
         try:
             data_pagamento = datetime.strptime(data_pagamento_str, "%d-%m-%Y").date()
         except ValueError:
-            return jsonify({"erro:":"Formato de data invalido. use DD-MM-YYYY"}), 400
+            return jsonify({"erro":"Formato de data invalido. use DD-MM-YYYY"}), 400
     try:
         sucesso,msg = registrar_pagamento(session, boleto_id, data_pagamento)
         if sucesso:
             return jsonify({"mensagem:": msg}), 200
-        return jsonify({"erro:":msg}), 400
+        return jsonify({"erro":msg}), 400
     except Exception as e:
-        return jsonify({"Erro:":str(e)}), 500
+        return jsonify({"erro":str(e)}), 500
     finally:
         session.close()
 
@@ -100,7 +101,7 @@ def importar_planilha():
     file_clientes = request.files.get('clientes')
     file_boletos = request.files.get('boletos')
     if not file_clientes and not file_boletos:
-        return jsonify({"Erro:":"Envie pelo menos um arquivo excel com os dados dos Clientes e Boletos"}),400
+        return jsonify({"erro":"Envie pelo menos um arquivo excel com os dados dos Clientes e Boletos"}),400
     temp_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "temp"))
     if not os.path.exists(temp_dir):
         os.makedirs(temp_dir)
@@ -122,7 +123,7 @@ def importar_planilha():
             "Boletos Cadastrados": boletos_novos
         }), 200
     except Exception as e:
-        return jsonify({'erro:':str(e)}),500
+        return jsonify({'erro':str(e)}),500
     finally:
         session.close()
 
@@ -169,7 +170,7 @@ def extrair_logs():
             logs = json.load(f)
         return jsonify(logs), 200
     except Exception as e:
-        return jsonify({"Erro": str(e)}),500
+        return jsonify({"erro": str(e)}),500
 
 @api_bp.route('/clientes/<int:cliente_id>/lgpd-exportar', methods=['GET'])
 def exportar_dados_cliente(cliente_id):
@@ -177,7 +178,7 @@ def exportar_dados_cliente(cliente_id):
     try:
         cliente = session.query(Titular).filter(Titular.id == cliente_id).first()
         if not cliente:
-            return jsonify({"Erro":"Cliente nao encontrado!"}), 404
+            return jsonify({"erro":"Cliente nao encontrado!"}), 404
         mensagens = session.query(Mensagem).filter(Mensagem.titular_id == cliente_id).all()
         dados={
             "cliente":{
@@ -213,7 +214,7 @@ def excluir_dados_cliente(cliente_id):
     try:
         cliente = session.query(Titular).filter(Titular.id == cliente_id).first()
         if not cliente:
-            return jsonify({"Erro":"Cliente nao encontrado!"}), 404
+            return jsonify({"erro":"Cliente nao encontrado!"}), 404
         session.query(Mensagem).filter(Mensagem.titular_id == cliente_id).delete()
         cliente.telefone = "ANONIMIZADO"
         cliente.nome = "Cliente Anonimo (LGPD)"
@@ -240,7 +241,7 @@ def verificar_webhook():
             print("Webhook verificado e ativo com sucesso!")
             return challenge, 200
         else:
-            return jsonify({"Erro":"Falha na verificacao do webhook"}), 403
+            return jsonify({"erro":"Falha na verificacao do webhook"}), 403
     finally:
         session.close()
 @api_bp.route("/webhook", methods =['POST'])
@@ -282,8 +283,74 @@ def receber_webhook():
                             session.commit()
                             print(f"Nova mensagem recebida de {titular.nome}:{texto_msg}")
     except Exception as e:
-        return jsonify({"Erro no processamento webhook":str(e)})
+        return jsonify({"erro":str(e)})
     finally:
         session.close()
     return "EVENT_RECEIVED",200
 
+@api_bp.route("/boletos/<int:boleto_id>/enviar", methods=["POST"])
+def enviar_manualmente(boleto_id):
+    session = get_session()
+    try:
+        boleto = session.query(Boleto).filter(Boleto.id == boleto_id).first()
+        if not boleto:
+            return jsonify({"erro":"Boleto nao encontrado!"}),404
+        titular = session.query(Titular).filter(Titular.id == boleto.titular_id).first()
+        if not titular:
+            return jsonify({"erro":"O cliente associadoa este boleto nao foi encontrado"}), 404
+        config = session.query(Configuracao).first()
+        if not config:
+            config = Configuracao()
+            session.add(config)
+            session.commit()
+        sucesso, retorno = enviar_mensagem(
+            session,
+            telefone=titular.telefone,
+            nome=titular.nome,
+            valor=boleto.valor,
+            vencimento=boleto.data_vencimento,
+            parcela_atual=boleto.parcela_atual,
+            total_parcelas=boleto.total_parcelas,
+            codigo_id=boleto.codigo_id,
+            template_nome=config.template_nome
+        )
+        if sucesso:
+            nova_mensagem = Mensagem(
+                boleto_id=boleto.id,
+                titular_id = titular.id,
+                tipo = 'enviada',
+                status = 'sent',
+                conteudo = f'Cobranca manual enviada por whatsapp. Boleto de valor R$ {boleto.valor:.2f}',
+                enviado_em = datetime.now(),
+                message_id = retorno
+            )
+            session.add(nova_mensagem)
+            session.commit()
+            registrar_log(
+                acao = 'ENVIO DE COBRANCA MANUAL',
+                status = 'SUCESSO',
+                detalhes = {
+                    'cliente':titular.nome,
+                    'telefone':titular.telefone,
+                    'boleto_id':boleto.id,
+                    'message_id':retorno
+                }
+            )
+            return jsonify ({'mensagem':"Mensagem manual enviada com sucesso"}),200
+        else:
+            registrar_log(
+                acao='ENVIO DE COBRANCA MANUAL',
+                status='FALHA',
+                detalhes={
+                    'cliente':titular.nome,
+                    'telefone':titular.telefone,
+                    'boleto_id':boleto.id,
+                    'erro':retorno
+                }
+            )
+            return jsonify({'erro':retorno}),400
+    except Exception as e:
+        session.rollback()
+        return jsonify({"erro":str(e)}),500
+    finally:
+        session.close()
