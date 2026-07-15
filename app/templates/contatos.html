@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="header">
+    <div class="header-title">
+        <h1>Clientes & Faturas</h1>
+        <p>Importe planilhas de faturamento, gerencie contatos e dê baixa nos pagamentos.</p>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="panel-header">
+        <h2 class="panel-title">Importação de Planilhas (Excel)</h2>
+    </div>
+    
+    <div class="upload-grid">
+        <div class="upload-area" id="drop-zone-clientes" onclick="document.getElementById('input-clientes').click()">
+            <input type="file" id="input-clientes" accept=".xlsx, .xls" style="display: none;" onchange="handleFileSelect(this, 'clientes')">
+            <svg class="upload-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a3 3 0 11-6 0 3 3 0 016 0zm-3 7h1.01M9 16h.01"></path>
+            </svg>
+            <div class="upload-text" id="text-clientes">Arraste a planilha de <span>Clientes</span> ou clique para enviar</div>
+            <div style="font-size: 11px; color: var(--text-muted);">Formatos suportados: .xlsx, .xls (ERP)</div>
+        </div>
+
+        <div class="upload-area" id="drop-zone-boletos" onclick="document.getElementById('input-boletos').click()">
+            <input type="file" id="input-boletos" accept=".xlsx, .xls" style="display: none;" onchange="handleFileSelect(this, 'boletos')">
+            <svg class="upload-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            <div class="upload-text" id="text-boletos">Arraste a planilha de <span>Boletos</span> ou clique para enviar</div>
+            <div style="font-size: 11px; color: var(--text-muted);">Formatos suportados: .xlsx, .xls (ERP)</div>
+        </div>
+    </div>
+    
+    <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+        <button class="btn btn-primary" id="btn-processar-importacao" onclick="processarImportacao()">Processar Importação</button>
+    </div>
+</div>
+
+<div class="panel">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 12px;">
+        <div style="display: flex; gap: 16px;">
+            <button class="btn btn-primary" id="tab-clientes" onclick="switchTab('clientes')" style="padding: 8px 16px; font-size: 13px;">Clientes</button>
+            <button class="btn btn-secondary" id="tab-boletos" onclick="switchTab('boletos')" style="padding: 8px 16px; font-size: 13px;">Faturas & Boletos</button>
+        </div>
+        
+        <div style="width: 280px; position: relative;">
+            <input type="text" id="search-bar" class="form-control" placeholder="Buscar..." onkeyup="filtrarRegistros()" style="padding-left: 36px; padding-top: 8px; padding-bottom: 8px; font-size: 13px;">
+            <svg style="position: absolute; left: 12px; top: 10px; width: 16px; height: 16px; color: var(--text-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+        </div>
+    </div>
+
+    <div class="table-wrapper">
+        <table class="table" id="data-table">
+            <thead id="table-head">
+            </thead>
+            <tbody id="table-body">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal-overlay" id="modal-pagamento">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 style="font-family: var(--font-heading); font-size: 16px; font-weight: 600;">Confirmar Liquidação</h3>
+            <button onclick="closeModal('modal-pagamento')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer;">
+                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;">Defina a data em que o cliente realizou a transferência ou pagamento do boleto. Deixe vazio para registrar com a data de <b>hoje</b>.</p>
+            <div class="form-group">
+                <label class="form-label">Data do Pagamento</label>
+                <input type="date" id="data-pagamento-input" class="form-control">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('modal-pagamento')">Cancelar</button>
+            <button class="btn btn-primary" id="confirm-payment-btn">Liquidado</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let activeTab = 'clientes';
+    let rawClientes = [];
+    let rawBoletos = [];
+    let filesToUpload = { clientes: null, boletos: null };
+    let selectedBoletoId = null;
+
+    document.addEventListener("DOMContentLoaded", function() {
+        carregarDados();
+        setupDragAndDrop();
+    });
+
+    function carregarDados() {
+        Promise.all([
+            fetch('/api/clientes').then(res => res.json()),
+            fetch('/api/boletos').then(res => res.json())
+        ]).then(([clientes, boletos]) => {
+            rawClientes = clientes;
+            rawBoletos = boletos;
+            renderActiveTab();
+        }).catch(err => {
+            console.error("Erro ao carregar dados:", err);
+            showToast("Erro ao conectar ao banco de dados", "danger");
+        });
+    }
+
+    function switchTab(tab) {
+        activeTab = tab;
+        document.getElementById('search-bar').value = '';
+        if (tab === 'clientes') {
+            document.getElementById('tab-clientes').className = 'btn btn-primary';
+            document.getElementById('tab-boletos').className = 'btn btn-secondary';
+        } else {
+            document.getElementById('tab-clientes').className = 'btn btn-secondary';
+            document.getElementById('tab-boletos').className = 'btn btn-primary';
+        }
+        renderActiveTab();
+    }
+
+    function renderActiveTab() {
+        const thead = document.getElementById('table-head');
+        const tbody = document.getElementById('table-body');
+        tbody.innerHTML = '';
+
+        if (activeTab === 'clientes') {
+            thead.innerHTML = `
+                <tr>
+                    <th>Cód. Cliente</th>
+                    <th>Nome</th>
+                    <th>Telefone</th>
+                    <th style="text-align: center;">Notificar Cobrança</th>
+                    <th style="text-align: right;">Ações de Privacidade (LGPD)</th>
+                </tr>
+            `;
+
+            if (rawClientes.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:32px;">Nenhum cliente cadastrado. Importe planilhas acima!</td></tr>`;
+                return;
+            }
+
+            rawClientes.forEach(c => {
+                const isChecked = c.notificacao_ativa ? 'checked' : '';
+                tbody.innerHTML += `
+                    <tr data-search="${c.nome.toLowerCase()} ${c.codcli} ${c.telefone}">
+                        <td style="font-family: var(--font-heading); font-weight:600;">${c.codcli}</td>
+                        <td>${c.nome}</td>
+                        <td>${c.telefone}</td>
+                        <td style="text-align: center;">
+                            <label class="switch">
+                                <input type="checkbox" ${isChecked} onchange="toggleNotificacao(${c.id}, this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </td>
+                        <td style="text-align: right; display:flex; justify-content:flex-end; gap:8px;">
+                            <button class="btn btn-secondary" onclick="exportarDadosLGPD(${c.id})" style="padding: 6px 12px; font-size: 11px;">Exportar</button>
+                            <button class="btn btn-danger" onclick="excluirDadosLGPD(${c.id})" style="padding: 6px 12px; font-size: 11px;">Excluir</button>
+                        </td>
+                    </tr>
+                `;
+            });
+
+        } else {
+            thead.innerHTML = `
+                <tr>
+                    <th>Cliente</th>
+                    <th>Linha Digitável / Cód. Barras</th>
+                    <th>Valor</th>
+                    <th>Vencimento</th>
+                    <th>Parcela</th>
+                    <th>Status</th>
+                    <th style="text-align: right;">Liquidar</th>
+                </tr>
+            `;
+
+            if (rawBoletos.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-secondary);padding:32px;">Nenhuma fatura pendente ou cadastrada.</td></tr>`;
+                return;
+            }
+
+            rawBoletos.forEach(b => {
+                const statusClass = b.status === 'pago' ? 'badge-success' : (b.status === 'atrasado' ? 'badge-danger' : 'badge-warning');
+                const isPaid = b.status === 'pago';
+                const actionButton = isPaid 
+                    ? `<button class="btn btn-secondary" disabled style="padding: 6px 12px; font-size: 11px; opacity:0.5; cursor:not-allowed;">Pago</button>`
+                    : `<button class="btn btn-success" onclick="abrirLiquidarModal(${b.id})" style="padding: 6px 12px; font-size: 11px;">Baixa Manual</button>`;
+
+                tbody.innerHTML += `
+                    <tr data-search="${b.cliente_nome.toLowerCase()} ${b.codigo_id} ${b.status}">
+                        <td style="font-weight:600;">${b.cliente_nome}</td>
+                        <td style="font-family: monospace; font-size: 11px; color:var(--text-secondary);">${b.codigo_id}</td>
+                        <td style="font-family: var(--font-heading); font-weight:600;">${formatMoney(b.valor)}</td>
+                        <td>${formatDate(b["data de vencimento"])}</td>
+                        <td>${b.parcela_atual}/${b.total_parcela}</td>
+                        <td><span class="badge ${statusClass}">${b.status}</span></td>
+                        <td style="text-align: right;">${actionButton}</td>
+                    </tr>
+                `;
+            });
+        }
+    }
+
+    function toggleNotificacao(clienteId, val) {
+        fetch(`/api/clientes/${clienteId}/notificacao`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notificacao_ativa: val })
+        }).then(res => res.json()).then(data => {
+            if (data.erro) {
+                showToast("Erro ao alterar notificação: " + data.erro, "danger");
+                carregarDados();
+            } else {
+                showToast("Notificação do cliente atualizada com sucesso!");
+                const idx = rawClientes.findIndex(c => c.id === clienteId);
+                if(idx !== -1) rawClientes[idx].notificacao_ativa = val;
+            }
+        }).catch(() => {
+            showToast("Falha na chamada de rede", "danger");
+            carregarDados();
+        });
+    }
+
+    function abrirLiquidarModal(boletoId) {
+        selectedBoletoId = boletoId;
+        document.getElementById('data-pagamento-input').value = '';
+        openModal('modal-pagamento');
+    }
+
+    document.getElementById('confirm-payment-btn').addEventListener('click', function() {
+        if (!selectedBoletoId) return;
+        const dateInput = document.getElementById('data-pagamento-input').value;
+        let payload = {};
+        
+        if (dateInput) {
+            const [y, m, d] = dateInput.split('-');
+            payload.data_pagamento = `${d}-${m}-${y}`;
+        }
+
+        fetch(`/api/boletos/${selectedBoletoId}/pagar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }).then(res => res.json()).then(data => {
+            closeModal('modal-pagamento');
+            if (data.erro) {
+                showToast("Erro ao registrar pagamento: " + data.erro, "danger");
+            } else {
+                showToast("Boleto liquidado com sucesso! Parcela gerada se pendente.");
+                carregarDados();
+            }
+        }).catch(() => {
+            closeModal('modal-pagamento');
+            showToast("Falha na conexão do servidor", "danger");
+        });
+    });
+
+    function exportarDadosLGPD(clienteId) {
+        window.location.href = `/api/clientes/${clienteId}/lgpd-exportar`;
+        showToast("JSON de dados do cliente exportado!", "info");
+    }
+
+    function excluirDadosLGPD(clienteId) {
+        if (confirm("ATENÇÃO: Deseja realmente excluir todas as mensagens e anonimizar os dados desse cliente por regras da LGPD? Essa ação é irreversível.")) {
+            fetch(`/api/clientes/${clienteId}/lgpd-excluir`, { method: 'DELETE' })
+            .then(res => res.json()).then(data => {
+                if (data.erro) {
+                    showToast("Erro na exclusão: " + data.erro, "danger");
+                } else {
+                    showToast("Cliente anonimizado com sucesso conforme LGPD!");
+                    carregarDados();
+                }
+            }).catch(() => {
+                showToast("Falha de rede na exclusão", "danger");
+            });
+        }
+    }
+
+    function filtrarRegistros() {
+        const query = document.getElementById('search-bar').value.toLowerCase();
+        const rows = document.querySelectorAll('#table-body tr');
+        rows.forEach(row => {
+            const text = row.getAttribute('data-search');
+            if (text && text.includes(query)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+    }
+
+    function setupDragAndDrop() {
+        const zones = [
+            { id: 'drop-zone-clientes', key: 'clientes', text: 'Arraste a planilha de <span>Clientes</span> ou clique para enviar' },
+            { id: 'drop-zone-boletos', key: 'boletos', text: 'Arraste a planilha de <span>Boletos</span> ou clique para enviar' }
+        ];
+
+        zones.forEach(zone => {
+            const el = document.getElementById(zone.id);
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                el.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    el.classList.add('dragover');
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                el.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    el.classList.remove('dragover');
+                }, false);
+            });
+
+            el.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const file = dt.files[0];
+                if (file) {
+                    filesToUpload[zone.key] = file;
+                    document.getElementById(`text-${zone.key}`).innerHTML = `Arquivo: <b style="color:var(--success);">${file.name}</b>`;
+                    showToast(`Planilha de ${zone.key} carregada para processamento!`);
+                }
+            }, false);
+        });
+    }
+
+    function handleFileSelect(input, key) {
+        const file = input.files[0];
+        if (file) {
+            filesToUpload[key] = file;
+            document.getElementById(`text-${key}`).innerHTML = `Arquivo: <b style="color:var(--success);">${file.name}</b>`;
+        }
+    }
+
+    function processarImportacao() {
+        if (!filesToUpload.clientes && !filesToUpload.boletos) {
+            showToast("Selecione pelo menos um arquivo de Clientes ou Boletos!", "warning");
+            return;
+        }
+
+        const btn = document.getElementById('btn-processar-importacao');
+        btn.textContent = "Processando...";
+        btn.disabled = true;
+
+        const formData = new FormData();
+        if (filesToUpload.clientes) formData.append('clientes', filesToUpload.clientes);
+        if (filesToUpload.boletos) formData.append('boletos', filesToUpload.boletos);
+
+        fetch('/api/import', {
+            method: 'POST',
+            body: formData
+        }).then(res => res.json()).then(data => {
+            btn.textContent = "Processar Importação";
+            btn.disabled = false;
+
+            if (data.Erro || data.erro) {
+                showToast("Erro ao importar dados: " + (data.Erro || data.erro), "danger");
+            } else {
+                showToast(`Sucesso! Clientes novos: ${data["Clientes Cadastrados"]}, Boletos novos: ${data["Boletos Cadastrados"]}`);
+                filesToUpload = { clientes: null, boletos: null };
+                document.getElementById('text-clientes').innerHTML = 'Arraste a planilha de <span>Clientes</span> ou clique para enviar';
+                document.getElementById('text-boletos').innerHTML = 'Arraste a planilha de <span>Boletos</span> ou clique para enviar';
+                carregarDados();
+            }
+        }).catch(() => {
+            btn.textContent = "Processar Importação";
+            btn.disabled = false;
+            showToast("Falha de rede ao enviar planilhas", "danger");
+        });
+    }
+</script>
+{% endblock %}

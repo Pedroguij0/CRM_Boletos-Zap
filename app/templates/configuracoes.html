@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="header">
+    <div class="header-title">
+        <h1>Configurações do Sistema</h1>
+        <p>Ajuste os parâmetros de cobrança automática e conecte a sua API do WhatsApp da Meta.</p>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-cols: 1fr 1fr; gap: 24px;">
+    <div class="panel">
+        <div class="panel-header">
+            <h2 class="panel-title">Regras de Cobrança</h2>
+        </div>
+        
+        <form id="config-regras-form" onsubmit="salvarConfig(event)" style="display: flex; flex-direction: column; gap: 20px;">
+            <div class="form-group">
+                <label class="form-label" for="dias_antecedencia">Dias de Antecedência</label>
+                <input type="number" id="dias_antecedencia" class="form-control" min="1" max="15" required>
+                <div style="font-size: 11px; color: var(--text-muted);">Define quantos dias antes do vencimento o primeiro lembrete de cobrança automática será enviado.</div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="horario_envio">Horário do Disparo Diário</label>
+                <input type="time" id="horario_envio" class="form-control" required>
+                <div style="font-size: 11px; color: var(--text-muted);">Horário em que o agendador diário executará a varredura e o envio dos boletos pendentes.</div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="template_nome">Nome do Template da Meta</label>
+                <input type="text" id="template_nome" class="form-control" required>
+                <div style="font-size: 11px; color: var(--text-muted);">Nome exato do modelo de mensagem aprovado no seu painel de desenvolvedores do Facebook.</div>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="align-self: flex-end;">Salvar Parâmetros</button>
+        </form>
+    </div>
+
+    <div class="panel">
+        <div class="panel-header">
+            <h2 class="panel-title">Credenciais do WhatsApp (Meta)</h2>
+        </div>
+
+        <form id="config-credenciais-form" onsubmit="salvarConfig(event)" style="display: flex; flex-direction: column; gap: 20px;">
+            <div class="form-group">
+                <label class="form-label" for="phone_number_id">ID do Número de Telefone (Phone ID)</label>
+                <input type="text" id="phone_number_id" class="form-control" placeholder="Ex: 1196243606908667">
+                <div style="font-size: 11px; color: var(--text-muted);">Identificador numérico fornecido pelo Facebook Developers para o seu número de testes/produção.</div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="verify_token">Token de Verificação (Verify Token)</label>
+                <input type="text" id="verify_token" class="form-control" placeholder="Sua senha de validação do webhook">
+                <div style="font-size: 11px; color: var(--text-muted);">A senha criada por você para validar e salvar o Webhook no painel da Meta.</div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="meta_token">Token de Acesso da Meta (Access Token)</label>
+                <input type="password" id="meta_token" class="form-control" placeholder="Chave temporária ou permanente de acesso da API">
+                <div style="font-size: 11px; color: var(--text-muted);">Token System User ou chave de desenvolvedor para autorização de envios.</div>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="align-self: flex-end;">Salvar Credenciais da Meta</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    let currentConfig = {};
+
+    document.addEventListener("DOMContentLoaded", function() {
+        carregarConfig();
+    });
+
+    function carregarConfig() {
+        fetch('/api/config')
+            .then(res => res.json())
+            .then(config => {
+                currentConfig = config;
+                
+                document.getElementById('dias_antecedencia').value = config.dias_antecedencia || 3;
+                document.getElementById('horario_envio').value = config.horario_envio || "09:00";
+                document.getElementById('template_nome').value = config.template_nome || "boleto_automatico_v2";
+                
+                document.getElementById('phone_number_id').value = config.phone_number_id || "";
+                document.getElementById('verify_token').value = config.verify_token || "";
+                document.getElementById('meta_token').value = config.meta_token || "";
+            })
+            .catch(() => {
+                showToast("Erro ao carregar configurações do banco", "danger");
+            });
+    }
+
+    function salvarConfig(e) {
+        e.preventDefault();
+        
+        const payload = {
+            dias_antecedencia: parseInt(document.getElementById('dias_antecedencia').value),
+            horario_envio: document.getElementById('horario_envio').value,
+            template_nome: document.getElementById('template_nome').value,
+            phone_number_id: document.getElementById('phone_number_id').value || null,
+            verify_token: document.getElementById('verify_token').value || null,
+            meta_token: document.getElementById('meta_token').value || null
+        };
+
+        fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }).then(res => res.json()).then(data => {
+            if (data.erro) {
+                showToast("Erro ao salvar: " + data.erro, "danger");
+            } else {
+                showToast("Configurações atualizadas com sucesso!");
+                carregarConfig();
+            }
+        }).catch(() => {
+            showToast("Falha de rede ao salvar configurações", "danger");
+        });
+    }
+</script>
+{% endblock %}

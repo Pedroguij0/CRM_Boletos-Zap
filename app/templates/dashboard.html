@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="header">
+    <div class="header-title">
+        <h1>Painel de Controle</h1>
+        <p>Visão geral do faturamento e status das cobranças automatizadas.</p>
+    </div>
+</div>
+
+<div class="metrics-grid">
+    <div class="metric-card">
+        <div class="metric-header">
+            <span class="metric-title">Clientes Cadastrados</span>
+            <div class="metric-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                </svg>
+            </div>
+        </div>
+        <div class="metric-value" id="metric-clients">-</div>
+        <div class="metric-trend trend-up">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+            <span>Ativos no banco</span>
+        </div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-header">
+            <span class="metric-title">Faturamento Total</span>
+            <div class="metric-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M12 16v1m0-1c-1.11 0-2.08-.402-2.599-1M12 16v1"></path>
+                </svg>
+            </div>
+        </div>
+        <div class="metric-value" id="metric-revenue">-</div>
+        <div class="metric-trend trend-up">
+            <span>Soma de todos os boletos</span>
+        </div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-header">
+            <span class="metric-title">Faturas Pendentes</span>
+            <div class="metric-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+                </svg>
+            </div>
+        </div>
+        <div class="metric-value" id="metric-pending">-</div>
+        <div class="metric-trend trend-down" id="pending-status-text">
+            <span>Aguardando pagamento</span>
+        </div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-header">
+            <span class="metric-title">Disparo Automático</span>
+            <div class="metric-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+        </div>
+        <div class="metric-value" id="metric-scheduler-time">-</div>
+        <div class="metric-trend trend-up">
+            <span>Horário diário programado</span>
+        </div>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-cols: 2fr 1fr; gap: 24px;">
+    <div class="panel">
+        <div class="panel-header">
+            <h2 class="panel-title">Faturas Vencendo Próximas</h2>
+            <a href="{{ url_for('views.contatos') }}" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">Ver Todas</a>
+        </div>
+        <div class="table-wrapper">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Cliente</th>
+                        <th>Valor</th>
+                        <th>Vencimento</th>
+                        <th>Parcela</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="recent-invoices-body">
+                    <tr>
+                        <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 32px;">
+                            Carregando faturas...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-header">
+            <h2 class="panel-title">Atividades do Sistema</h2>
+            <a href="{{ url_for('views.logs') }}" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;">Ver Histórico</a>
+        </div>
+        <div class="timeline" id="recent-logs-timeline" style="gap: 16px; font-size: 13px;">
+            <div style="color: var(--text-muted); text-align: center; padding: 24px 0;">
+                Carregando atividades...
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        Promise.all([
+            fetch('/api/clientes').then(res => res.json()),
+            fetch('/api/boletos').then(res => res.json()),
+            fetch('/api/config').then(res => res.json()),
+            fetch('/api/logs').then(res => res.json())
+        ]).then(([clientes, boletos, config, logs]) => {
+            document.getElementById('metric-clients').textContent = clientes.length || 0;
+            
+            const totalRevenue = boletos.reduce((acc, b) => acc + b.valor, 0);
+            document.getElementById('metric-revenue').textContent = formatMoney(totalRevenue);
+            
+            const pendingBoletos = boletos.filter(b => b.status === 'pendente' || b.status === 'atrasado');
+            document.getElementById('metric-pending').textContent = pendingBoletos.length || 0;
+            if (pendingBoletos.length > 0) {
+                const atrasados = boletos.filter(b => b.status === 'atrasado').length;
+                document.getElementById('pending-status-text').innerHTML = `<span>${atrasados} em atraso crítico</span>`;
+                if(atrasados > 0) {
+                    document.getElementById('pending-status-text').className = "metric-trend trend-down";
+                } else {
+                    document.getElementById('pending-status-text').className = "metric-trend trend-up";
+                }
+            }
+            
+            document.getElementById('metric-scheduler-time').textContent = config.horario_envio || "09:00";
+            
+            const tbody = document.getElementById('recent-invoices-body');
+            tbody.innerHTML = '';
+            
+            const sortedBoletos = [...boletos].sort((a, b) => new Date(a["data de vencimento"]) - new Date(b["data de vencimento"]));
+            const top5 = sortedBoletos.slice(0, 5);
+            
+            if (top5.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:32px;">Nenhuma fatura cadastrada.</td></tr>`;
+            } else {
+                top5.forEach(b => {
+                    const statusClass = b.status === 'pago' ? 'badge-success' : (b.status === 'atrasado' ? 'badge-danger' : 'badge-warning');
+                    tbody.innerHTML += `
+                        <tr>
+                            <td style="font-weight: 600;">${b.cliente_nome}</td>
+                            <td>${formatMoney(b.valor)}</td>
+                            <td>${formatDate(b["data de vencimento"])}</td>
+                            <td>${b.parcela_atual}/${b.total_parcela}</td>
+                            <td><span class="badge ${statusClass}">${b.status}</span></td>
+                        </tr>
+                    `;
+                });
+            }
+            
+            const timeline = document.getElementById('recent-logs-timeline');
+            timeline.innerHTML = '';
+            const topLogs = (Array.isArray(logs) ? logs : []).slice(-4).reverse();
+            
+            if (topLogs.length === 0) {
+                timeline.innerHTML = `<div style="color:var(--text-muted);text-align:center;padding:24px 0;">Nenhuma atividade recente registrada.</div>`;
+            } else {
+                topLogs.forEach(log => {
+                    const dateStr = log.data_hora ? formatDate(log.data_hora) : '';
+                    let color = '#64748b';
+                    if (log.status === 'SUCESSO') color = '#10b981';
+                    if (log.status === 'FALHA') color = '#ef4444';
+                    
+                    timeline.innerHTML += `
+                        <div style="border-left: 2px solid ${color}; padding-left: 12px; margin-bottom: 8px;">
+                            <div style="display:flex;justify-content:space-between;font-weight:600;">
+                                <span>${log.acao}</span>
+                                <span style="font-size:11px;color:var(--text-secondary);">${dateStr}</span>
+                            </div>
+                            <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">
+                                Status: <span style="color:${color};font-weight:600;">${log.status}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+        }).catch(err => {
+            console.error("Erro ao carregar dados do dashboard:", err);
+            showToast("Erro ao carregar dados do painel principal", "error");
+        });
+    });
+</script>
+{% endblock %}

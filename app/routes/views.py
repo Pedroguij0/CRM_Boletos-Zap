@@ -3,7 +3,7 @@ from flask import Blueprint, render_template
 views_bp = Blueprint('views', __name__)
 @views_bp.route('/')
 @views_bp.route('/dashboard')
-def dasboard():
+def dashboard():
     return render_template('dashboard.html')
 @views_bp.route('/contatos')
 def contatos():
