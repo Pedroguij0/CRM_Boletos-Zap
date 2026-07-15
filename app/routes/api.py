@@ -102,7 +102,7 @@ def importar_planilha():
     file_boletos = request.files.get('boletos')
     if not file_clientes and not file_boletos:
         return jsonify({"erro":"Envie pelo menos um arquivo excel com os dados dos Clientes e Boletos"}),400
-    temp_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "temp"))
+    from app.config import TEMP_DIR as temp_dir
     if not os.path.exists(temp_dir):
         os.makedirs(temp_dir)
     clientes_novos = 0
