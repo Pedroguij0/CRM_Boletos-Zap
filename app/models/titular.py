@@ -9,3 +9,4 @@ class Titular(Base):
     telefone = Column(String, nullable=False, unique=True)
     notificacao_ativa = Column(Boolean, default= True)
     ultimo_pagamento = Column(DateTime, default=func.now(), onupdate=func.now())
+    codcli = Column(Integer, unique= True, nullable=False)

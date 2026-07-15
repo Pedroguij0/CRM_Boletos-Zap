@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Float, Date, DateTime, ForeignKey, CheckConstraint
+from datetime import date
 from app.db.connection import Base
 
 class Boleto(Base):
@@ -8,7 +9,7 @@ class Boleto(Base):
     codigo_id = Column(String(50), nullable=False, unique=True)
     parcela_atual = Column(Integer, nullable=False)
     total_parcelas = Column(Integer, nullable=False)
-    criado_em = Column(Date, nullable=False)
+    criado_em = Column(Date, nullable=False, default=date.today)
     valor = Column(Float, nullable=False)
     data_vencimento = Column(Date, nullable=False)
     data_pagamento = Column(Date, nullable=True)

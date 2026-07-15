@@ -8,8 +8,9 @@ class Mensagem(Base):
     titular_id = Column(Integer, ForeignKey("Titular.id"), nullable=False)
     conteudo = Column(Text, nullable=False)
     enviado_em = Column(DateTime, nullable=False)
+    status = Column(String(20), nullable=True)
     tipo= Column(String(20), nullable=False)
-    message_id_meta = Column(String(200), nullable=True)
+    message_id = Column(String(200), nullable=True)
 
     
 
