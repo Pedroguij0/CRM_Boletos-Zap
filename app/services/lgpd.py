@@ -2,7 +2,7 @@ import os
 import json
 from datetime import datetime, date
 
-LOG_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "logs"))
+from app.config import LOG_DIR
 LOG_FILE = os.path.join(LOG_DIR, "auditoria_meta.json")
 
 def registrar_log(acao, status, detalhes):

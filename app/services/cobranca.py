@@ -1,7 +1,7 @@
 from datetime import date, timedelta, datetime
 from sqlalchemy import select
 from app.models import Boleto, Titular, Configuracao, Mensagem
-from app.services.whatsapp import enviar_mensagem
+from app.services.whatsapp import enviar_mensagem, gerar_texto_template
 from app.services.lgpd import registrar_log
 
 def processar_cobrancas(session):
@@ -42,12 +42,21 @@ def processar_cobrancas(session):
             template_nome=config.template_nome
         )
         if sucessos:
+            texto_mensagem = gerar_texto_template(
+                config.template_nome,
+                titular.nome,
+                boleto.valor,
+                boleto.data_vencimento,
+                boleto.parcela_atual,
+                boleto.total_parcelas,
+                boleto.codigo_id
+            )
             nova_mensagem = Mensagem(
                 boleto_id=boleto.id,
                 titular_id=titular.id,
                 tipo="enviada",
                 status="sent",
-                conteudo=f"Cobrança automática enviada. Boleto de R$ {boleto.valor:.2f}",
+                conteudo=texto_mensagem,
                 enviado_em=datetime.now(),
                 message_id=retorno
             )

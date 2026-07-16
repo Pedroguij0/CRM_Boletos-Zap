@@ -1,4 +1,4 @@
-from app.services.whatsapp import enviar_mensagem
+from app.services.whatsapp import enviar_mensagem, gerar_texto_template
 from flask import Blueprint, jsonify, request, send_file
 import os
 import json
@@ -102,7 +102,7 @@ def importar_planilha():
     file_boletos = request.files.get('boletos')
     if not file_clientes and not file_boletos:
         return jsonify({"erro":"Envie pelo menos um arquivo excel com os dados dos Clientes e Boletos"}),400
-    temp_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "temp"))
+    from app.config import TEMP_DIR as temp_dir
     if not os.path.exists(temp_dir):
         os.makedirs(temp_dir)
     clientes_novos = 0
@@ -237,7 +237,7 @@ def verificar_webhook():
     try:
         config = session.query(Configuracao).first()
         verify_token = (config.verify_token if config else None) or os.getenv('TOKEN_AQUI', 'boletoszap_verify_token')
-        if mode == 'subscribe' and token == VERIFY_TOKEN:
+        if mode == 'subscribe' and token == verify_token:
             print("Webhook verificado e ativo com sucesso!")
             return challenge, 200
         else:
@@ -315,12 +315,21 @@ def enviar_manualmente(boleto_id):
             template_nome=config.template_nome
         )
         if sucesso:
+            texto_mensagem = gerar_texto_template(
+                config.template_nome,
+                titular.nome,
+                boleto.valor,
+                boleto.data_vencimento,
+                boleto.parcela_atual,
+                boleto.total_parcelas,
+                boleto.codigo_id
+            )
             nova_mensagem = Mensagem(
                 boleto_id=boleto.id,
                 titular_id = titular.id,
                 tipo = 'enviada',
                 status = 'sent',
-                conteudo = f'Cobranca manual enviada por whatsapp. Boleto de valor R$ {boleto.valor:.2f}',
+                conteudo = texto_mensagem,
                 enviado_em = datetime.now(),
                 message_id = retorno
             )
