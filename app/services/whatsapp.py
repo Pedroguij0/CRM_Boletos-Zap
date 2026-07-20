@@ -76,6 +76,6 @@ def gerar_texto_template(template_nome, nome, valor, vencimento, parcela_atual, 
     elif template_nome == "jaspers_market_plain_text_v1":
         return "Welcome to Jasper’s Market, your local grocery store providing farm-fresh produce and high-quality goods!"
     elif template_nome == "hello_world":
-        return "Olá {nome}, informamos que o boleto no valor de R$ {valor:.2f}, com vencimento em {venc_str}, referente à parcela {parcela_atual}/{total_parcelas} está disponível. Segue o código de barras para pagamento: {codigo_id}"
+        return f"Olá {nome}, informamos que o boleto no valor de R$ {valor:.2f}, com vencimento em {venc_str}, referente à parcela {parcela_atual}/{total_parcelas} está disponível. Segue o código de barras para pagamento: {codigo_id}"
     else:
         return f"Cobrança enviada usando o template {template_nome}. Valor: R$ {valor:.2f}"
