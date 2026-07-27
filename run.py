@@ -22,7 +22,10 @@ from app import create_app
 app = create_app()
 
 def abrir_navegador():
-    webbrowser.open_new("http://127.0.0.1:5000/")
+    if sys.platform == 'win32':
+        os.system('start http://127.0.0.1:5000/')
+    else:
+        webbrowser.open("http://127.0.0.1:5000/")
 
 if __name__ == '__main__':
     # Realizar backup de segurança do banco local de forma automática no Python

@@ -94,3 +94,31 @@ function formatDate(dateStr) {
     const year = d.getUTCFullYear();
     return `${day}/${month}/${year}`;
 }
+
+// Sidebar Collapse / Expand Functionality & Persistence
+document.addEventListener('DOMContentLoaded', function() {
+    const collapseBtn = document.getElementById('sidebarCollapseBtn');
+    const reopenBtn = document.getElementById('sidebarReopenBtn');
+
+    // Restore state from localStorage
+    const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+    if (isCollapsed) {
+        document.body.classList.add('sidebar-collapsed');
+    }
+
+    if (collapseBtn) {
+        collapseBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            document.body.classList.add('sidebar-collapsed');
+            localStorage.setItem('sidebarCollapsed', 'true');
+        });
+    }
+
+    if (reopenBtn) {
+        reopenBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            document.body.classList.remove('sidebar-collapsed');
+            localStorage.setItem('sidebarCollapsed', 'false');
+        });
+    }
+});

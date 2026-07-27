@@ -17,11 +17,11 @@ echo [2/2] Compilando executavel unico...
 echo Isso pode levar de 1 a 2 minutos. Por favor, aguarde...
 echo.
 
-:: Tenta localizar e usar a instalação do Python do Anaconda do usuário
-set env_path="C:\Users\allme\Downloads\Escola\Anaconda;C:\Users\allme\Downloads\Escola\Anaconda\Scripts;"
-set Path=%env_path%%Path%
+:: Configura o PATH incluindo os binários do Anaconda para puxar DLLs de sistema necessárias
+set Path=C:\Users\allme\Downloads\Escola\Anaconda\Library\bin;C:\Users\allme\Downloads\Escola\Anaconda\DLLs;C:\Users\allme\Downloads\Escola\Anaconda;%Path%
 
-pyinstaller --noconfirm --onefile --console --name "CRM_BoletosZap" --add-data "app/templates;app/templates" --add-data "app/static;app/static" run.py
+:: Roda a compilação a partir do ambiente virtual limpo (.venv)
+.venv\Scripts\pyinstaller --noconfirm --onefile --console --name "CRM_BoletosZap" --add-data "app/templates;app/templates" --add-data "app/static;app/static" run.py
 
 echo.
 echo ======================================================================

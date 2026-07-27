@@ -20,15 +20,18 @@ def registrar_pagamento(session, boleto_id, data_pagamento=None):
     stmt = select(Boleto).where(Boleto.id == boleto_id)
     boleto = session.scalar(stmt)
     if not boleto:
-        return None
+        return False, "Boleto não encontrado."
+    
+    hoje = date.today()
+    if data_pagamento and data_pagamento > hoje:
+        return False, "A data de pagamento deve ser anterior ou igual a data atual"
+    
     boleto.status = "pago"
-    boleto.data_pagamento = data_pagamento or date.today()
+    boleto.data_pagamento = data_pagamento or hoje
     if boleto.parcela_atual < boleto.total_parcelas:
         proximo_vencimento = boleto.data_vencimento + timedelta(days=30)
         novo_boleto = Boleto(
             titular_id=boleto.titular_id,
-            #ATENÇÃO! ISTO DEVE SER ALTERADO PELO USUÁRIO POSTERIORMENTE PARA GARANTIR A INTEGRIDADE DO BOLETO.
-            #Este código gerado tem como finalidade apenas garantir a consistência e o bom funcionamento da aplicação.
             codigo_id=f"{boleto.codigo_id}-P{boleto.parcela_atual+1}",
             parcela_atual=boleto.parcela_atual + 1,
             total_parcelas=boleto.total_parcelas,
@@ -38,5 +41,5 @@ def registrar_pagamento(session, boleto_id, data_pagamento=None):
         )
         session.add(novo_boleto)
     session.commit()
-    return boleto
+    return True, "Pagamento liquidado com sucesso!"
 

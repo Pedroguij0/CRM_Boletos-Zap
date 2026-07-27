@@ -11,6 +11,33 @@ def enviar_mensagem(session, telefone, nome, valor, vencimento, parcela_atual, t
         "Authorization":f"Bearer {token_meta}",
         "Content-Type":"application/json"
     }
+
+    # Ajusta dinamicamente a quantidade de parâmetros e o idioma de acordo com o template
+    parameters = []
+    language_code = "pt_BR"
+
+    if template_nome == "jaspers_market_order_confirmation_v1":
+        language_code = "en_US"
+        parameters = [
+            {"type": "text", "text": nome},
+            {"type": "text", "text": str(codigo_id)},
+            {"type": "text", "text": vencimento.strftime("%d/%m/%Y")}
+        ]
+    elif template_nome == "jaspers_market_plain_text_v1" or template_nome == "hello_world":
+        language_code = "en_US"
+        parameters = []
+    else:
+        # Padrão para boleto_automatico_v2 (6 variáveis)
+        language_code = "pt_BR"
+        parameters = [
+            {"type":"text", "text":nome},
+            {"type":"text", "text":f"{valor:.2f}"},
+            {"type":"text", "text":vencimento.strftime("%d/%m/%Y")},
+            {"type":"text", "text":str(parcela_atual)},
+            {"type":"text", "text":str(total_parcelas)},
+            {"type":"text", "text":str(codigo_id)}
+        ]
+
     payload ={
         "messaging_product": "whatsapp",
         "to":telefone,
@@ -18,19 +45,12 @@ def enviar_mensagem(session, telefone, nome, valor, vencimento, parcela_atual, t
         "template":{
             "name":template_nome,
             "language":{
-                "code":"pt-BR"
+                "code":language_code
             },
             "components":[
                 {
                     "type":"body",
-                    "parameters":[
-                        {"type":"text", "text":nome},
-                        {"type":"text", "text":f"{valor:.2f}"},
-                        {"type":"text", "text":vencimento.strftime("%d/%m/%Y")},
-                        {"type":"text", "text":str(parcela_atual)},
-                        {"type":"text", "text":str(total_parcelas)},
-                        {"type":"text", "text":str(codigo_id)}
-                    ]
+                    "parameters":parameters
                 }
             ]
         }
@@ -47,4 +67,15 @@ def enviar_mensagem(session, telefone, nome, valor, vencimento, parcela_atual, t
     except Exception as e:
         return False, f"Erro de conexão com a META: {str(e)}"
 
-        
+def gerar_texto_template(template_nome, nome, valor, vencimento, parcela_atual, total_parcelas, codigo_id):
+    venc_str = vencimento.strftime("%d/%m/%Y") if hasattr(vencimento, "strftime") else str(vencimento)
+    if template_nome == "boleto_automatico_v2":
+        return f"Olá {nome}, informamos que o boleto no valor de R$ {valor:.2f}, com vencimento em {venc_str}, referente à parcela {parcela_atual}/{total_parcelas} está disponível. Segue o código de barras para pagamento: {codigo_id}"
+    elif template_nome == "jaspers_market_order_confirmation_v1":
+        return f"Hi {nome},\n\nThank you for your purchase! Your order number is {codigo_id}.\n\nWe'll start getting your farm fresh groceries ready to ship.\n\nEstimated delivery: {venc_str}."
+    elif template_nome == "jaspers_market_plain_text_v1":
+        return "Welcome to Jasper’s Market, your local grocery store providing farm-fresh produce and high-quality goods!"
+    elif template_nome == "hello_world":
+        return f"Olá {nome}, informamos que o boleto no valor de R$ {valor:.2f}, com vencimento em {venc_str}, referente à parcela {parcela_atual}/{total_parcelas} está disponível. Segue o código de barras para pagamento: {codigo_id}"
+    else:
+        return f"Cobrança enviada usando o template {template_nome}. Valor: R$ {valor:.2f}"
