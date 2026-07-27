@@ -80,18 +80,49 @@ def liquidar_boleto(boleto_id):
     dados = request.get_json() or {}
     data_pagamento_str = dados.get('data_pagamento')
     data_pagamento = None
+    
+    # Obter informações do boleto e do cliente para o registro de auditoria
+    boleto = session.query(Boleto).filter(Boleto.id == boleto_id).first()
+    cliente_nome = "Cliente não identificado"
+    codigo_id = f"ID-{boleto_id}"
+    if boleto:
+        codigo_id = boleto.codigo_id
+        if boleto.titular_id:
+            titular = session.query(Titular).filter(Titular.id == boleto.titular_id).first()
+            if titular:
+                cliente_nome = titular.nome
+
     if data_pagamento_str:
-        try:
-            data_pagamento = datetime.strptime(data_pagamento_str, "%d-%m-%Y").date()
-        except ValueError:
-            return jsonify({"erro":"Formato de data invalido. use DD-MM-YYYY"}), 400
+        parsed = False
+        for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d", "%d/%m/%Y"):
+            try:
+                data_pagamento = datetime.strptime(data_pagamento_str.strip(), fmt).date()
+                parsed = True
+                break
+            except ValueError:
+                continue
+        if not parsed:
+            err_msg = "Formato de data inválido. Use a seleção de data do calendário."
+            registrar_log("Liquidação Manual", "FALHA", f"Boleto {codigo_id} ({cliente_nome}) - Erro: {err_msg}")
+            session.close()
+            return jsonify({"erro": err_msg}), 400
+
     try:
-        sucesso,msg = registrar_pagamento(session, boleto_id, data_pagamento)
+        sucesso, msg = registrar_pagamento(session, boleto_id, data_pagamento)
+        dt_str = data_pagamento.strftime("%d/%m/%Y") if data_pagamento else datetime.now().strftime("%d/%m/%Y")
+        
         if sucesso:
-            return jsonify({"mensagem:": msg}), 200
-        return jsonify({"erro":msg}), 400
+            detalhes_log = f"Boleto {codigo_id} ({cliente_nome}) de R$ {boleto.valor:.2f} liquidado manualmente. Data de Pagamento: {dt_str}."
+            registrar_log("Liquidação Manual", "SUCESSO", detalhes_log)
+            return jsonify({"mensagem": msg}), 200
+        else:
+            detalhes_log = f"Falha na liquidação do boleto {codigo_id} ({cliente_nome}): {msg}"
+            registrar_log("Liquidação Manual", "FALHA", detalhes_log)
+            return jsonify({"erro": msg}), 400
     except Exception as e:
-        return jsonify({"erro":str(e)}), 500
+        detalhes_log = f"Erro na liquidação manual do boleto {codigo_id} ({cliente_nome}): {str(e)}"
+        registrar_log("Liquidação Manual", "FALHA", detalhes_log)
+        return jsonify({"erro": str(e)}), 500
     finally:
         session.close()
 
@@ -178,30 +209,60 @@ def exportar_dados_cliente(cliente_id):
     try:
         cliente = session.query(Titular).filter(Titular.id == cliente_id).first()
         if not cliente:
-            return jsonify({"erro":"Cliente nao encontrado!"}), 404
+            return jsonify({"erro":"Cliente não encontrado!"}), 404
+            
         mensagens = session.query(Mensagem).filter(Mensagem.titular_id == cliente_id).all()
-        dados={
-            "cliente":{
-                "codcli":cliente.codcli,
+        boletos = session.query(Boleto).filter(Boleto.titular_id == cliente_id).all()
+        
+        # Filtrar logs de auditoria relacionados especificamente a este cliente e seus boletos
+        logs_relacionados = []
+        if os.path.exists(LOG_FILE):
+            try:
+                with open(LOG_FILE, 'r', encoding='utf-8') as f:
+                    todos_logs = json.load(f)
+                    codes = [b.codigo_id for b in boletos]
+                    for log in todos_logs:
+                        det = str(log.get("detalhes", ""))
+                        if str(cliente_id) in det or cliente.nome in det or str(cliente.codcli) in det or any(code in det for code in codes if code):
+                            logs_relacionados.append(log)
+            except Exception:
+                logs_relacionados = []
+
+        dados = {
+            "cliente": {
+                "id": cliente.id,
+                "codcli": cliente.codcli,
                 "nome": cliente.nome,
                 "telefone": cliente.telefone,
                 "notificacoes_ativas": cliente.notificacao_ativa
             },
-            "mensagens":[{
+            "faturas_boletos": [{
+                "id": b.id,
+                "codigo_id": b.codigo_id,
+                "valor": b.valor,
+                "data_vencimento": b.data_vencimento.strftime("%d/%m/%Y") if b.data_vencimento else None,
+                "parcela": f"{b.parcela_atual}/{b.total_parcelas}",
+                "status": b.status,
+                "data_pagamento": b.data_pagamento.strftime("%d/%m/%Y") if b.data_pagamento else None
+            } for b in boletos],
+            "historico_chat": [{
                 "tipo": m.tipo,
                 "conteudo": m.conteudo,
-                "data_envio": m.enviado_em.strftime("%d-%m-%Y %H:%M:%S") if m.enviado_em else None,
+                "data_envio": m.enviado_em.strftime("%d/%m/%Y %H:%M:%S") if m.enviado_em else None,
                 "status": m.status
-            }for m in mensagens]
+            } for m in mensagens],
+            "logs_auditoria_relacionados": logs_relacionados
         }
+        
+        filename_clean = f"lgpd_cliente_{cliente.codcli}_{cliente.nome.replace(' ', '_')}.json"
         memoria_file = io.BytesIO()
         memoria_file.write(json.dumps(dados, indent=4, ensure_ascii=False).encode('utf-8'))
         memoria_file.seek(0)
         return send_file(
             memoria_file,
-            mimetype ="application/json",
+            mimetype="application/json",
             as_attachment=True,
-            download_name=f"lgpd_export_{cliente.codcli}.json"
+            download_name=filename_clean
         )
     except Exception as e:
         return jsonify({"erro": str(e)}), 500

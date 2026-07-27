@@ -93,11 +93,26 @@
     let selectedBoletoId = null;
 
     document.addEventListener("DOMContentLoaded", function() {
-        carregarDados();
+        const urlParams = new URLSearchParams(window.location.search);
+        const tabParam = urlParams.get('tab');
+        const statusParam = urlParams.get('status');
+
+        if (tabParam === 'boletos' || tabParam === 'clientes') {
+            activeTab = tabParam;
+            if (tabParam === 'clientes') {
+                document.getElementById('tab-clientes').className = 'btn btn-primary';
+                document.getElementById('tab-boletos').className = 'btn btn-secondary';
+            } else {
+                document.getElementById('tab-clientes').className = 'btn btn-secondary';
+                document.getElementById('tab-boletos').className = 'btn btn-primary';
+            }
+        }
+
+        carregarDados(statusParam);
         setupDragAndDrop();
     });
 
-    function carregarDados() {
+    function carregarDados(statusParam) {
         Promise.all([
             fetch('/api/clientes').then(res => res.json()),
             fetch('/api/boletos').then(res => res.json())
@@ -105,6 +120,13 @@
             rawClientes = clientes;
             rawBoletos = boletos;
             renderActiveTab();
+            if (statusParam === 'pendente') {
+                const searchInput = document.getElementById('search-bar');
+                if (searchInput) {
+                    searchInput.value = 'pendente';
+                    filtrarRegistros();
+                }
+            }
         }).catch(err => {
             console.error("Erro ao carregar dados:", err);
             showToast("Erro ao conectar ao banco de dados", "danger");
@@ -146,7 +168,15 @@
             }
 
             rawClientes.forEach(c => {
-                const isChecked = c.notificacao_ativa ? 'checked' : '';
+                const isAnonymized = c.telefone === "ANONIMIZADO" || (c.nome && c.nome.includes("Anonimo"));
+                const isChecked = (c.notificacao_ativa && !isAnonymized) ? 'checked' : '';
+                const switchInput = isAnonymized 
+                    ? `<input type="checkbox" disabled title="Cliente excluído conforme LGPD - Notificação desativada">` 
+                    : `<input type="checkbox" ${isChecked} onchange="toggleNotificacao(${c.id}, this.checked)">`;
+                const deleteBtn = isAnonymized
+                    ? `<button class="btn btn-secondary" disabled style="padding: 6px 12px; font-size: 11px; opacity:0.5; cursor:not-allowed;" title="Dados anonimizados conforme LGPD">Excluído</button>`
+                    : `<button class="btn btn-danger" onclick="excluirDadosLGPD(${c.id})" style="padding: 6px 12px; font-size: 11px;">Excluir</button>`;
+
                 tbody.innerHTML += `
                     <tr data-search="${c.nome.toLowerCase()} ${c.codcli} ${c.telefone}">
                         <td style="font-family: var(--font-heading); font-weight:600;">${c.codcli}</td>
@@ -154,13 +184,13 @@
                         <td>${c.telefone}</td>
                         <td style="text-align: center;">
                             <label class="switch">
-                                <input type="checkbox" ${isChecked} onchange="toggleNotificacao(${c.id}, this.checked)">
+                                ${switchInput}
                                 <span class="slider"></span>
                             </label>
                         </td>
                         <td style="text-align: right; display:flex; justify-content:flex-end; gap:8px;">
                             <button class="btn btn-secondary" onclick="exportarDadosLGPD(${c.id})" style="padding: 6px 12px; font-size: 11px;">Exportar</button>
-                            <button class="btn btn-danger" onclick="excluirDadosLGPD(${c.id})" style="padding: 6px 12px; font-size: 11px;">Excluir</button>
+                            ${deleteBtn}
                         </td>
                     </tr>
                 `;
@@ -174,8 +204,8 @@
                     <th>Valor</th>
                     <th>Vencimento</th>
                     <th>Parcela</th>
-                    <th>Status</th>
-                    <th style="text-align: right;">Liquidar</th>
+                    <th style="text-align: center;">Status</th>
+                    <th style="text-align: center;">Liquidar</th>
                 </tr>
             `;
 
@@ -184,13 +214,21 @@
                 return;
             }
 
-            rawBoletos.forEach(b => {
+            // Ordena as faturas: faturas pendentes/atrasadas primeiro, pagas por último; ambas por data de vencimento crescente
+            const sortedBoletos = [...rawBoletos].sort((a, b) => {
+                const aPago = a.status === 'pago' ? 1 : 0;
+                const bPago = b.status === 'pago' ? 1 : 0;
+                if (aPago !== bPago) return aPago - bPago;
+                return new Date(a["data de vencimento"]) - new Date(b["data de vencimento"]);
+            });
+
+            sortedBoletos.forEach(b => {
                 const statusClass = b.status === 'pago' ? 'badge-success' : (b.status === 'atrasado' ? 'badge-danger' : 'badge-warning');
                 const isPaid = b.status === 'pago';
                 const actionButton = isPaid 
                     ? `<button class="btn btn-secondary" disabled style="padding: 6px 12px; font-size: 11px; opacity:0.5; cursor:not-allowed;">Pago</button>`
                     : `<button class="btn btn-primary" onclick="enviarWhatsAppManual(${b.id})" style="padding: 6px 12px; font-size: 11px; margin-right: 6px;">Cobrar (WhatsApp)</button>` +
-                      `<button class="btn btn-success" onclick="abrirLiquidarModal(${b.id})" style="padding: 6px 12px; font-size: 11px;">Baixa Manual</button>`;
+                      `<button class="btn btn-success" onclick="abrirLiquidarModal(${b.id})" style="padding: 6px 12px; font-size: 11px;">Manual</button>`;
 
                 tbody.innerHTML += `
                     <tr data-search="${b.cliente_nome.toLowerCase()} ${b.codigo_id} ${b.status}">
@@ -199,8 +237,8 @@
                         <td style="font-family: var(--font-heading); font-weight:600;">${formatMoney(b.valor)}</td>
                         <td>${formatDate(b["data de vencimento"])}</td>
                         <td>${b.parcela_atual}/${b.total_parcela}</td>
-                        <td><span class="badge ${statusClass}">${b.status}</span></td>
-                        <td style="text-align: right;">${actionButton}</td>
+                        <td style="text-align: center;"><span class="badge ${statusClass}">${b.status}</span></td>
+                        <td style="text-align: center; white-space: nowrap;">${actionButton}</td>
                     </tr>
                 `;
             });
@@ -229,19 +267,37 @@
 
     function abrirLiquidarModal(boletoId) {
         selectedBoletoId = boletoId;
-        document.getElementById('data-pagamento-input').value = '';
+        // Preenche com a data atual como padrão no formato YYYY-MM-DD para facilidade
+        const todayStr = new Date().toISOString().split('T')[0];
+        document.getElementById('data-pagamento-input').value = todayStr;
         openModal('modal-pagamento');
     }
 
     document.getElementById('confirm-payment-btn').addEventListener('click', function() {
         if (!selectedBoletoId) return;
         const dateInput = document.getElementById('data-pagamento-input').value;
-        let payload = {};
         
-        if (dateInput) {
-            const [y, m, d] = dateInput.split('-');
-            payload.data_pagamento = `${d}-${m}-${y}`;
+        if (!dateInput) {
+            showToast("Por favor, selecione uma data de pagamento válida.", "danger");
+            return;
         }
+
+        const selectedDate = new Date(dateInput + 'T00:00:00');
+        const today = new Date();
+        today.setHours(23, 59, 59, 999);
+
+        if (isNaN(selectedDate.getTime())) {
+            showToast("Data de pagamento inválida.", "danger");
+            return;
+        }
+
+        if (selectedDate > today) {
+            showToast("A data de pagamento deve ser anterior ou igual a data atual", "danger");
+            return;
+        }
+
+        const [y, m, d] = dateInput.split('-');
+        const payload = { data_pagamento: `${y}-${m}-${d}` };
 
         fetch(`/api/boletos/${selectedBoletoId}/pagar`, {
             method: 'POST',
@@ -252,7 +308,7 @@
             if (data.erro) {
                 showToast("Erro ao registrar pagamento: " + data.erro, "danger");
             } else {
-                showToast("Boleto liquidado com sucesso! Parcela gerada se pendente.");
+                showToast(data.mensagem || "Pagamento liquidado com sucesso!");
                 carregarDados();
             }
         }).catch(() => {
