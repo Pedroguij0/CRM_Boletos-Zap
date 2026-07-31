@@ -5,6 +5,7 @@ class Configuracao(Base):
     __tablename__ = "Configuracao"
     id = Column(Integer, primary_key=True, default=1)
     dias_antecedencia = Column(Integer, nullable=False, default=3)
+    dias_subsequencia = Column(Integer, nullable=False, default=3)
     template_nome = Column(String(100), nullable=False, default="jaspers_market_plain_text_v1")
     horario_envio = Column(String(5), nullable=False, default="09:00")
     meta_token = Column(String(500), nullable=True)

@@ -38,23 +38,25 @@ def enviar_mensagem(session, telefone, nome, valor, vencimento, parcela_atual, t
             {"type":"text", "text":str(codigo_id)}
         ]
 
-    payload ={
+    payload = {
         "messaging_product": "whatsapp",
-        "to":telefone,
-        "type":"template",
-        "template":{
-            "name":template_nome,
-            "language":{
-                "code":language_code
-            },
-            "components":[
-                {
-                    "type":"body",
-                    "parameters":parameters
-                }
-            ]
+        "to": telefone,
+        "type": "template",
+        "template": {
+            "name": template_nome,
+            "language": {
+                "code": language_code
+            }
         }
     }
+
+    if parameters:
+        payload["template"]["components"] = [
+            {
+                "type": "body",
+                "parameters": parameters
+            }
+        ]
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=10)
         dados_resposta = response.json()

@@ -11,7 +11,8 @@
 <div class="panel">
     <div class="panel-header">
         <h2 class="panel-title">Fila de Logs Recentes</h2>
-        <button class="btn btn-secondary" onclick="carregarLogs()" style="padding: 6px 12px; font-size: 12px;">Atualizar Lista</button>
+        <button class="btn btn-secondary" onclick="carregarLogs()" style="padding: 6px 12px; font-size: 12px;">Atualizar
+            Lista</button>
     </div>
 
     <div class="timeline" id="logs-timeline-container" style="padding-top: 12px; padding-bottom: 24px;">
@@ -22,7 +23,7 @@
 </div>
 
 <script>
-    document.addEventListener("DOMContentLoaded", function() {
+    document.addEventListener("DOMContentLoaded", function () {
         carregarLogs();
     });
 
@@ -48,12 +49,16 @@
                 reversedLogs.forEach(log => {
                     const statusClass = log.status === 'SUCESSO' ? 'success' : 'error';
                     const formattedDate = formatDate(log.data_hora);
-                    
+
                     let detailsHTML = '';
                     if (log.detalhes) {
                         detailsHTML = '<div style="margin-top: 8px; display:flex; flex-direction:column; gap:4px; font-family: monospace; font-size:11px; background-color:var(--bg-main); padding: 8px 12px; border-radius:6px; border: 1px solid var(--border);">';
-                        for (let [k, v] of Object.entries(log.detalhes)) {
-                            detailsHTML += `<div><span style="color:var(--accent); font-weight:600;">${k}:</span> ${v}</div>`;
+                        if (typeof log.detalhes === 'object' && log.detalhes !== null) {
+                            for (let [k, v] of Object.entries(log.detalhes)) {
+                                detailsHTML += `<div><span style="color:var(--accent); font-weight:600;">${k}:</span> ${v}</div>`;
+                            }
+                        } else {
+                            detailsHTML += `<div>${log.detalhes}</div>`;
                         }
                         detailsHTML += '</div>';
                     }

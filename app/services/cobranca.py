@@ -3,32 +3,45 @@ from sqlalchemy import select
 from app.models import Boleto, Titular, Configuracao, Mensagem
 from app.services.whatsapp import enviar_mensagem, gerar_texto_template
 from app.services.lgpd import registrar_log
+from app.services.boleto_service import atualizar_status_boleto
 
 def processar_cobrancas(session):
+    # Atualiza automaticamente o status dos boletos vencidos para 'atrasado'
+    atualizar_status_boleto(session)
+
     config = session.query(Configuracao).first()
     if not config:
         config = Configuracao()
         session.add(config)
         session.commit()
     hoje = date.today()
-    data_alvo = hoje + timedelta(days=config.dias_antecedencia)
+    datas_antecedentes = [hoje + timedelta(days=d) for d in range(1,(config.dias_antecedencia or 0)+1)]
     vencimento_hoje = hoje
-    atrasado_1_dia = hoje-timedelta(days=1)
+    data_hoje = [hoje]
+    datas_subsequentes = [hoje - timedelta(days=d) for d in range(1,(config.dias_subsequencia or 0)+1)]
+    datas_elegiveis = datas_antecedentes + data_hoje + datas_subsequentes
     stmt= (
         select(Boleto).join(Titular)
         .where(Boleto.status.in_(["pendente", "atrasado"]))
-        .where(Boleto.data_vencimento.in_([data_alvo, vencimento_hoje, atrasado_1_dia]))
+        .where(Boleto.data_vencimento.in_(datas_elegiveis))
         .where(Titular.notificacao_ativa == True)
     )
-    boletos_cobrados = session.scalars(stmt).all()
+    boletos_a_cobrar = session.scalars(stmt).all()
 
-    if not boletos_cobrados:
+    if not boletos_a_cobrar:
         registrar_log("ENVIO_AUTOMATICO", "SUCESSO", {"mensagem": "Nenhum boleto elegivel para cobranca hoje"})
         return 0
     enviados = 0
-    for boleto in boletos_cobrados:
+    enviado_hoje = datetime.combine(hoje, datetime.min.time())
+    for boleto in boletos_a_cobrar:
         titular = session.query(Titular).filter(Titular.id == boleto.titular_id).first()
         if not titular:
+            continue
+        boleto_enviado_hoje = session.query(Mensagem).filter(
+            Mensagem.boleto_id == boleto.id,
+            Mensagem.enviado_em >= enviado_hoje
+        ).first()
+        if boleto_enviado_hoje:
             continue
         sucessos, retorno = enviar_mensagem(
             session,
@@ -64,24 +77,23 @@ def processar_cobrancas(session):
             enviados+=1
             registrar_log(
                 acao='ENVIO COBRANCA',
-                status = 'SUCESSO',
-                detalhes ={
-                    "cliente": titular.nome,
-                    "telefone": titular.telefone,
-                    "boleto_id":boleto.id,
-                    "message_id":retorno
-
+                status='SUCESSO',
+                detalhes={
+                    "Boleto": boleto.codigo_id,
+                    "Cliente": titular.nome,
+                    "Telefone": titular.telefone,
+                    "Conteúdo da Mensagem": texto_mensagem
                 }
             )
         else:
             registrar_log(
-                acao='ENVIO_COBRANCA',
+                acao='ENVIO COBRANCA',
                 status='FALHA',
                 detalhes={
-                    "cliente": titular.nome,
-                    "telefone": titular.telefone,
-                    "boleto_id": boleto.id,
-                    "erro": retorno
+                    "Boleto": boleto.codigo_id,
+                    "Cliente": titular.nome,
+                    "Telefone": titular.telefone,
+                    "Erro": retorno
                 }
             )
 

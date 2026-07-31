@@ -9,4 +9,4 @@ else:
 DATABASE_PATH = os.path.join(BASE_DIR, "Dados_Boletos.db")
 DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
 LOG_DIR = os.path.join(BASE_DIR, "logs")
-TEMP_DIR = os.path.join(BASE_DIR, "temp")
+

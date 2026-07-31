@@ -3,7 +3,7 @@
 {% block content %}
 <div class="header">
     <div class="header-title">
-        <h1>Histórico do Chat (Somente Leitura)</h1>
+        <h1>Histórico do Chat</h1>
         <p>Acompanhe em tempo real as conversas enviadas pelo robô e as respostas recebidas dos clientes.</p>
     </div>
 </div>
@@ -45,8 +45,11 @@
     let activeClientId = null;
     let refreshInterval = null;
 
+    let contactsInterval = null;
+
     document.addEventListener("DOMContentLoaded", function() {
         carregarContatos();
+        contactsInterval = setInterval(carregarContatos, 8000);
     });
 
     function carregarContatos() {
@@ -54,18 +57,28 @@
             .then(res => res.json())
             .then(clientes => {
                 const list = document.getElementById('chat-users-list');
-                list.innerHTML = '';
 
                 if (clientes.length === 0) {
                     list.innerHTML = `<div style="color:var(--text-muted);text-align:center;padding:32px 0;font-size:13px;">Nenhum cliente cadastrado.</div>`;
                     return;
                 }
 
+                // Ordena contatos: clientes com mensagens mais recentes ficam no TOPO (estilo WhatsApp)
+                clientes.sort((a, b) => {
+                    const timeA = a.ultima_mensagem_em || '';
+                    const timeB = b.ultima_mensagem_em || '';
+                    if (timeA && timeB) return timeB.localeCompare(timeA);
+                    if (timeA) return -1;
+                    if (timeB) return 1;
+                    return a.nome.localeCompare(b.nome);
+                });
+
+                let html = '';
                 clientes.forEach(c => {
                     const initials = c.nome.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
                     const activeClass = c.id === activeClientId ? 'active' : '';
                     
-                    list.innerHTML += `
+                    html += `
                         <div class="chat-user-item ${activeClass}" id="user-item-${c.id}" onclick="selecionarCliente(${c.id}, '${c.nome}', '${c.telefone}')">
                             <div class="chat-avatar">${initials}</div>
                             <div class="chat-user-info">
@@ -76,6 +89,10 @@
                         </div>
                     `;
                 });
+
+                if (list.innerHTML !== html) {
+                    list.innerHTML = html;
+                }
             })
             .catch(() => {
                 showToast("Erro ao carregar lista de contatos", "danger");
@@ -99,21 +116,19 @@
 
         if (refreshInterval) clearInterval(refreshInterval);
         carregarMensagens(id);
-        refreshInterval = setInterval(() => carregarMensagens(id), 10000);
+        refreshInterval = setInterval(() => carregarMensagens(id), 3000);
     }
 
-    // Usamos o endpoint de exportação da LGPD para obter o histórico do chat de forma simples
     function carregarMensagens(id) {
-        fetch(`/api/clientes/${id}/lgpd-exportar`)
+        fetch(`/api/clientes/${id}/mensagens`)
             .then(res => res.json())
             .then(data => {
                 if (activeClientId !== id) return;
 
                 const box = document.getElementById('chat-messages-body');
-                const previousHeight = box.scrollHeight;
-                box.innerHTML = '';
-
-                const mensagens = data.mensagens || [];
+                const isAtBottom = (box.scrollHeight - box.scrollTop) <= (box.clientHeight + 80);
+                
+                const mensagens = Array.isArray(data) ? data : (data.historico_chat || data.mensagens || []);
 
                 if (mensagens.length === 0) {
                     box.innerHTML = `
@@ -125,6 +140,7 @@
                     return;
                 }
 
+                let html = '';
                 mensagens.forEach(m => {
                     const isSent = m.tipo === 'enviada';
                     const bubbleClass = isSent ? 'bubble-sent' : 'bubble-received';
@@ -138,7 +154,7 @@
                         statusLabel = ` • <span style="color:${color};font-weight:600;text-transform:uppercase;font-size:9px;">${m.status}</span>`;
                     }
 
-                    box.innerHTML += `
+                    html += `
                         <div class="chat-bubble ${bubbleClass}">
                             <div>${m.conteudo}</div>
                             <span class="bubble-time">${m.data_envio || ''}${statusLabel}</span>
@@ -146,17 +162,21 @@
                     `;
                 });
 
-                if (box.scrollHeight > previousHeight) {
-                    box.scrollTop = box.scrollHeight;
+                if (box.innerHTML !== html) {
+                    box.innerHTML = html;
+                    if (isAtBottom || box.scrollTop === 0) {
+                        box.scrollTop = box.scrollHeight;
+                    }
                 }
             })
             .catch(err => {
-                console.error("Erro ao carregar mensagens:", err);
+                console.error("Erro ao carregar mensagens do chat:", err);
             });
     }
 
     window.addEventListener('beforeunload', () => {
         if (refreshInterval) clearInterval(refreshInterval);
+        if (contactsInterval) clearInterval(contactsInterval);
     });
 </script>
 {% endblock %}

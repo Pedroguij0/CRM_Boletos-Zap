@@ -18,7 +18,13 @@
             <div class="form-group">
                 <label class="form-label" for="dias_antecedencia">Dias de Antecedência</label>
                 <input type="number" id="dias_antecedencia" class="form-control" min="1" max="15" required>
-                <div style="font-size: 11px; color: var(--text-muted);">Define quantos dias antes do vencimento o primeiro lembrete de cobrança automática será enviado.</div>
+                <div style="font-size: 11px; color: var(--text-muted);">Define quantos dias antes do vencimento o lembrete de cobrança automática começará a ser enviado.</div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="dias_subsequencia">Dias de Subsequência (Pós-Vencimento)</label>
+                <input type="number" id="dias_subsequencia" class="form-control" min="1" max="15" required>
+                <div style="font-size: 11px; color: var(--text-muted);">Define por quantos dias após o vencimento o robô continuará enviando cobranças diárias para boletos atrasados.</div>
             </div>
 
             <div class="form-group">
@@ -80,6 +86,7 @@
                 currentConfig = config;
                 
                 document.getElementById('dias_antecedencia').value = config.dias_antecedencia || 3;
+                document.getElementById('dias_subsequencia').value = config.dias_subsequencia || 3;
                 document.getElementById('horario_envio').value = config.horario_envio || "09:00";
                 document.getElementById('template_nome').value = config.template_nome || "boleto_automatico_v2";
                 
@@ -97,6 +104,7 @@
         
         const payload = {
             dias_antecedencia: parseInt(document.getElementById('dias_antecedencia').value),
+            dias_subsequencia: parseInt(document.getElementById('dias_subsequencia').value),
             horario_envio: document.getElementById('horario_envio').value,
             template_nome: document.getElementById('template_nome').value,
             phone_number_id: document.getElementById('phone_number_id').value || null,

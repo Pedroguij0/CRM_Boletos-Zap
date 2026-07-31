@@ -6,7 +6,7 @@ class Boleto(Base):
     __tablename__ = "Boleto"
     id= Column(Integer, primary_key=True, autoincrement=True)
     titular_id = Column(Integer, ForeignKey("Titular.id"), nullable=False)
-    codigo_id = Column(String(50), nullable=False, unique=True)
+    codigo_id = Column(String(50), nullable=False, unique=True)#NUMERO DO BOLETO
     parcela_atual = Column(Integer, nullable=False)
     total_parcelas = Column(Integer, nullable=False)
     criado_em = Column(Date, nullable=False, default=date.today)

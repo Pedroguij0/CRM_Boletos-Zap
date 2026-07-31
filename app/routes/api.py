@@ -8,25 +8,32 @@ from werkzeug.utils import secure_filename
 from app.db import get_session
 from app.models import Titular, Boleto, Configuracao, Mensagem
 from app.services.import_services import importar_clientes, importar_boletos
-from app.services.boleto_service import registrar_pagamento
+from app.services.boleto_service import registrar_pagamento, atualizar_status_boleto
 from app.services.lgpd import LOG_FILE, registrar_log
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
-@api_bp.route('/clientes', methods = ['GET'])
+
+@api_bp.route('/clientes', methods=['GET'])
 def listar_clientes():
     session = get_session()
     try:
-        clientes = session.query(Titular).order_by(Titular.nome).all()
-        return jsonify([{
-            "id":c.id,
-            "codcli":c.codcli,
-            "nome": c.nome,
-            "notificacao_ativa": c.notificacao_ativa,
-            "telefone": c.telefone
-        }for c in clientes]), 200
+        clientes = session.query(Titular).all()
+        lista = []
+        for c in clientes:
+            ultima_msg = session.query(Mensagem).filter(Mensagem.titular_id == c.id).order_by(Mensagem.enviado_em.desc()).first()
+            ultima_data = ultima_msg.enviado_em.strftime("%Y-%m-%d %H:%M:%S") if (ultima_msg and ultima_msg.enviado_em) else ""
+            lista.append({
+                "id": c.id,
+                "codcli": c.codcli,
+                "nome": c.nome,
+                "notificacao_ativa": c.notificacao_ativa,
+                "telefone": c.telefone,
+                "ultima_mensagem_em": ultima_data
+            })
+        return jsonify(lista), 200
     except Exception as e:
-        return jsonify({"erro":str(e)}),500
+        return jsonify({"erro": str(e)}), 500
     finally:
         session.close()
 
@@ -54,6 +61,7 @@ def alterar_notificacao(cliente_id):
 def listar_boletos():
     session = get_session()
     try:
+        atualizar_status_boleto(session)
         boletos= session.query(Boleto).order_by(Boleto.data_vencimento.asc()).all()
         listaB = []
         for b in boletos:
@@ -103,7 +111,16 @@ def liquidar_boleto(boleto_id):
                 continue
         if not parsed:
             err_msg = "Formato de data inválido. Use a seleção de data do calendário."
-            registrar_log("Liquidação Manual", "FALHA", f"Boleto {codigo_id} ({cliente_nome}) - Erro: {err_msg}")
+            registrar_log(
+                acao="Liquidação Manual",
+                status="FALHA",
+                detalhes={
+                    "Boleto": codigo_id,
+                    "Cliente": cliente_nome,
+                    "Status": f"Erro: {err_msg}",
+                    "Data de pagamento": data_pagamento_str or "Não informada"
+                }
+            )
             session.close()
             return jsonify({"erro": err_msg}), 400
 
@@ -112,16 +129,41 @@ def liquidar_boleto(boleto_id):
         dt_str = data_pagamento.strftime("%d/%m/%Y") if data_pagamento else datetime.now().strftime("%d/%m/%Y")
         
         if sucesso:
-            detalhes_log = f"Boleto {codigo_id} ({cliente_nome}) de R$ {boleto.valor:.2f} liquidado manualmente. Data de Pagamento: {dt_str}."
-            registrar_log("Liquidação Manual", "SUCESSO", detalhes_log)
+            registrar_log(
+                acao="Liquidação Manual",
+                status="SUCESSO",
+                detalhes={
+                    "Boleto": codigo_id,
+                    "Cliente": cliente_nome,
+                    "Status": "Sucesso, boleto liquidado manualmente",
+                    "Data de pagamento": dt_str
+                }
+            )
             return jsonify({"mensagem": msg}), 200
         else:
-            detalhes_log = f"Falha na liquidação do boleto {codigo_id} ({cliente_nome}): {msg}"
-            registrar_log("Liquidação Manual", "FALHA", detalhes_log)
+            registrar_log(
+                acao="Liquidação Manual",
+                status="FALHA",
+                detalhes={
+                    "Boleto": codigo_id,
+                    "Cliente": cliente_nome,
+                    "Status": f"Erro: {msg}",
+                    "Data de pagamento": dt_str
+                }
+            )
             return jsonify({"erro": msg}), 400
     except Exception as e:
-        detalhes_log = f"Erro na liquidação manual do boleto {codigo_id} ({cliente_nome}): {str(e)}"
-        registrar_log("Liquidação Manual", "FALHA", detalhes_log)
+        dt_fallback = dt_str if 'dt_str' in locals() else datetime.now().strftime("%d/%m/%Y")
+        registrar_log(
+            acao="Liquidação Manual",
+            status="FALHA",
+            detalhes={
+                "Boleto": codigo_id,
+                "Cliente": cliente_nome,
+                "Status": f"Erro: {str(e)}",
+                "Data de pagamento": dt_fallback
+            }
+        )
         return jsonify({"erro": str(e)}), 500
     finally:
         session.close()
@@ -133,22 +175,15 @@ def importar_planilha():
     file_boletos = request.files.get('boletos')
     if not file_clientes and not file_boletos:
         return jsonify({"erro":"Envie pelo menos um arquivo excel com os dados dos Clientes e Boletos"}),400
-    from app.config import TEMP_DIR as temp_dir
-    if not os.path.exists(temp_dir):
-        os.makedirs(temp_dir)
     clientes_novos = 0
     boletos_novos = 0
     try:
         if file_clientes:
-            file_path= os.path.join(temp_dir, secure_filename(file_clientes.filename))
-            file_clientes.save(file_path)
-            clientes_novos = importar_clientes(session, file_path)
-            os.remove(file_path)
+            stream_clientes = io.BytesIO(file_clientes.read())
+            clientes_novos = importar_clientes(session, stream_clientes)
         if file_boletos:
-            file_path = os.path.join(temp_dir, secure_filename(file_boletos.filename))
-            file_boletos.save(file_path)
-            boletos_novos = importar_boletos(session, file_path)
-            os.remove(file_path)
+            stream_boletos = io.BytesIO(file_boletos.read())
+            boletos_novos = importar_boletos(session, stream_boletos)
         return jsonify({
             "Clientes Cadastrados": clientes_novos,
             "Boletos Cadastrados": boletos_novos
@@ -169,16 +204,17 @@ def gerenciar_config():
     if request.method == 'GET':
         return jsonify({
             "dias_antecedencia":config.dias_antecedencia,
+            'dias_subsequencia': config.dias_subsequencia,
             "template_nome":config.template_nome,
             "horario_envio":config.horario_envio,
             "verify_token":config.verify_token,
             "meta_token":config.meta_token,
             "phone_number_id":config.phone_number_id
-
         }),200
     dados = request.get_json()
     try:
         config.dias_antecedencia = int(dados.get('dias_antecedencia', config.dias_antecedencia))
+        config.dias_subsequencia = int(dados.get('dias_subsequencia', config.dias_subsequencia))
         config.template_nome = str(dados.get('template_nome', config.template_nome))
         config.horario_envio = str(dados.get("horario_envio", config.horario_envio))
         config.meta_token = dados.get('meta_token',config.meta_token)
@@ -203,6 +239,29 @@ def extrair_logs():
     except Exception as e:
         return jsonify({"erro": str(e)}),500
 
+@api_bp.route('/clientes/<int:cliente_id>/mensagens', methods=['GET'])
+def obter_mensagens_cliente(cliente_id):
+    session = get_session()
+    try:
+        cliente = session.query(Titular).filter(Titular.id == cliente_id).first()
+        if not cliente:
+            return jsonify({"erro": "Cliente não encontrado!"}), 404
+        
+        mensagens = session.query(Mensagem).filter(Mensagem.titular_id == cliente_id).order_by(Mensagem.enviado_em.asc()).all()
+        resultado = [{
+            "id": m.id,
+            "tipo": m.tipo,
+            "conteudo": m.conteudo,
+            "data_envio": m.enviado_em.strftime("%d/%m/%Y %H:%M:%S") if m.enviado_em else None,
+            "status": m.status
+        } for m in mensagens]
+        
+        return jsonify(resultado), 200
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+    finally:
+        session.close()
+
 @api_bp.route('/clientes/<int:cliente_id>/lgpd-exportar', methods=['GET'])
 def exportar_dados_cliente(cliente_id):
     session = get_session()
@@ -211,7 +270,7 @@ def exportar_dados_cliente(cliente_id):
         if not cliente:
             return jsonify({"erro":"Cliente não encontrado!"}), 404
             
-        mensagens = session.query(Mensagem).filter(Mensagem.titular_id == cliente_id).all()
+        mensagens = session.query(Mensagem).filter(Mensagem.titular_id == cliente_id).order_by(Mensagem.enviado_em.asc()).all()
         boletos = session.query(Boleto).filter(Boleto.titular_id == cliente_id).all()
         
         # Filtrar logs de auditoria relacionados especificamente a este cliente e seus boletos
@@ -227,6 +286,13 @@ def exportar_dados_cliente(cliente_id):
                             logs_relacionados.append(log)
             except Exception:
                 logs_relacionados = []
+
+        lista_mensagens = [{
+            "tipo": m.tipo,
+            "conteudo": m.conteudo,
+            "data_envio": m.enviado_em.strftime("%d/%m/%Y %H:%M:%S") if m.enviado_em else None,
+            "status": m.status
+        } for m in mensagens]
 
         dados = {
             "cliente": {
@@ -245,12 +311,8 @@ def exportar_dados_cliente(cliente_id):
                 "status": b.status,
                 "data_pagamento": b.data_pagamento.strftime("%d/%m/%Y") if b.data_pagamento else None
             } for b in boletos],
-            "historico_chat": [{
-                "tipo": m.tipo,
-                "conteudo": m.conteudo,
-                "data_envio": m.enviado_em.strftime("%d/%m/%Y %H:%M:%S") if m.enviado_em else None,
-                "status": m.status
-            } for m in mensagens],
+            "mensagens": lista_mensagens,
+            "historico_chat": lista_mensagens,
             "logs_auditoria_relacionados": logs_relacionados
         }
         
@@ -397,25 +459,25 @@ def enviar_manualmente(boleto_id):
             session.add(nova_mensagem)
             session.commit()
             registrar_log(
-                acao = 'ENVIO DE COBRANCA MANUAL',
-                status = 'SUCESSO',
-                detalhes = {
-                    'cliente':titular.nome,
-                    'telefone':titular.telefone,
-                    'boleto_id':boleto.id,
-                    'message_id':retorno
+                acao='ENVIO DE COBRANCA MANUAL',
+                status='SUCESSO',
+                detalhes={
+                    "Boleto": boleto.codigo_id,
+                    "Cliente": titular.nome,
+                    "Telefone": titular.telefone,
+                    "Conteúdo da Mensagem": texto_mensagem
                 }
             )
-            return jsonify ({'mensagem':"Mensagem manual enviada com sucesso"}),200
+            return jsonify({'mensagem': "Mensagem manual enviada com sucesso"}), 200
         else:
             registrar_log(
                 acao='ENVIO DE COBRANCA MANUAL',
                 status='FALHA',
                 detalhes={
-                    'cliente':titular.nome,
-                    'telefone':titular.telefone,
-                    'boleto_id':boleto.id,
-                    'erro':retorno
+                    "Boleto": boleto.codigo_id,
+                    "Cliente": titular.nome,
+                    "Telefone": titular.telefone,
+                    "Erro": retorno
                 }
             )
             return jsonify({'erro':retorno}),400
