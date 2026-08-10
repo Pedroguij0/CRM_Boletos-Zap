@@ -30,16 +30,6 @@ def abrir_navegador():
 if __name__ == '__main__':
     # Realizar backup de segurança do banco local de forma automática no Python
     database_file = os.path.join(BASE_DIR, "Dados_Boletos.db")
-    if os.path.exists(database_file):
-        try:
-            backup_dir = os.path.join(BASE_DIR, "backups")
-            if not os.path.exists(backup_dir):
-                os.makedirs(backup_dir)
-            shutil.copy(database_file, os.path.join(backup_dir, "Dados_Boletos_Backup.db"))
-            print("[OK] Backup automatico do banco salvo em: backups/Dados_Boletos_Backup.db")
-        except Exception as e:
-            print("[Aviso] Nao foi possivel criar o backup do banco:", str(e))
-
     print("Servidor Flask carregado com sucesso!")
     print("Acesse as telas pelo navegador em: http://127.0.0.1:5000/")
     
