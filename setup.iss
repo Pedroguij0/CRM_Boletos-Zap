@@ -2,12 +2,13 @@
 AppName=CRM_BoletosZap
 AppVersion=1.0.0
 AppPublisher=CRM BoletosZap Inc.
-DefaultDirName={autopf}\CRM_BoletosZap
+DefaultDirName= {localappdata}\Programs\CRM_BoletosZap
 DefaultGroupName=CRM_BoletosZap
 OutputBaseFilename=CRM_BoletosZap_Setup
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
+PrivilegesRequired=lowest
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
